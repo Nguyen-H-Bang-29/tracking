@@ -149,17 +149,16 @@ class ExactInference(InferenceModule):
         pacmanPosition = gameState.getPacmanPosition()
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
 
-        # Replace this code with a correct observation update
-        # Be sure to handle the "jail" edge case where the ghost is eaten
-        # and noisyDistance is None
+
         allPossible = util.Counter()
-        for p in self.legalPositions:
-            trueDistance = util.manhattanDistance(p, pacmanPosition)
-            if emissionModel[trueDistance] > 0:
-                allPossible[p] = 1.0
-
+        if noisyDistance == None:
+            allPossible = util.Counter()
+            allPossible[self.getJailPosition()] = 1.0
+        else:
+            for location in self.legalPositions:
+                distance = util.manhattanDistance(location, pacmanPosition)
+                allPossible[location] = emissionModel[distance] * self.beliefs[location]
         "*** END YOUR CODE HERE ***"
 
         allPossible.normalize()
@@ -219,7 +218,12 @@ class ExactInference(InferenceModule):
         positions after a time update from a particular position.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        allPossible = util.Counter()
+        for oldPos in self.legalPositions:
+            newPosDist = self.getPositionDistribution(self.setGhostPosition(gameState, oldPos))
+            for newPos, prob in newPosDist.items():
+                allPossible[newPos] += prob*self.beliefs[oldPos]
+        self.beliefs = allPossible
 
     def getBeliefDistribution(self):
         return self.beliefs
@@ -253,7 +257,12 @@ class ParticleFilter(InferenceModule):
         Storing your particles as a Counter (where there could be an associated
         weight with each position) is incorrect and may produce errors.
         """
-        "*** YOUR CODE HERE ***"
+        count, self.particles = 0, []
+        while count < self.numParticles:
+            for position in self.legalPositions:
+                if count < self.numParticles:
+                    self.particles.append(position)
+                    count += 1
 
     def observe(self, observation, gameState):
         """
@@ -285,8 +294,21 @@ class ParticleFilter(InferenceModule):
         noisyDistance = observation
         emissionModel = busters.getObservationDistribution(noisyDistance)
         pacmanPosition = gameState.getPacmanPosition()
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+
+        if noisyDistance == None: 
+            self.particles = [self.getJailPosition()] * self.numParticles
+        else:
+            allPossible, oldBelief = util.Counter(), self.getBeliefDistribution()        
+            for location in self.legalPositions:
+                distance = util.manhattanDistance(location, pacmanPosition)
+                allPossible[location] += emissionModel[distance] * oldBelief[location]
+            if not any(allPossible.values()):
+                self.initializeUniformly(gameState)
+            else:
+                temp = []
+                for _ in range(0, self.numParticles):
+                    temp.append(util.sample(allPossible))
+                self.particles = temp
 
     def elapseTime(self, gameState):
         """
@@ -303,7 +325,11 @@ class ParticleFilter(InferenceModule):
         a belief distribution.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        tmpParticles = []
+        for oldPos in self.particles:
+            newPosDist = self.getPositionDistribution(self.setGhostPosition(gameState, oldPos))
+            tmpParticles.append(util.sample(newPosDist))
+        self.particles = tmpParticles
 
     def getBeliefDistribution(self):
         """
@@ -313,7 +339,11 @@ class ParticleFilter(InferenceModule):
         Counter object)
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        distribution = util.Counter()
+        for element in self.particles:
+            distribution[element] += 1
+        distribution.normalize()
+        return distribution
 
 class MarginalInference(InferenceModule):
     """
